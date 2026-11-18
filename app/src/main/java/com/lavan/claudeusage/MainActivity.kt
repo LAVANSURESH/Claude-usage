@@ -42,6 +42,10 @@ class MainActivity : Activity() {
         root.addView(button("Sync from claude.ai") {
             startActivity(android.content.Intent(this, SyncActivity::class.java))
         })
+        root.addView(button("Refresh now (background fetch)") {
+            RefreshWorker.refreshNow(this)
+            android.widget.Toast.makeText(this, "Refreshing… reopen the app in a few seconds", android.widget.Toast.LENGTH_SHORT).show()
+        })
         root.addView(button("+1 message") { UsageStore.increment(this); render() })
         root.addView(button("Reset") { UsageStore.reset(this); render() })
 
@@ -52,6 +56,7 @@ class MainActivity : Activity() {
             gravity = Gravity.START
         })
         setContentView(root)
+        RefreshWorker.schedule(this)
     }
 
     override fun onResume() { super.onResume(); render() }
@@ -64,6 +69,7 @@ class MainActivity : Activity() {
             "Session $synced% (synced)\n${UsageStore.syncedResetText(this)}\n${UsageStore.weeklyText(this)}"
         else
             "${UsageStore.used(this)} / ${UsageStore.limit(this)} messages (local counter)\n${UsageStore.resetText(this)}"
+        status.append("\nBackground: ${UsageStore.status(this)}")
         UsageWidget.refreshAll(this)
     }
 

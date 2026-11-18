@@ -69,6 +69,7 @@ class SyncActivity : Activity() {
             done = true
             UsageStore.saveSync(this, r.sessionPct, r.sessionResetMs, r.weeklyPct, r.weeklyResetMs)
             UsageWidget.refreshAll(this)
+            RefreshWorker.schedule(this)
             Toast.makeText(this, "Synced: session ${r.sessionPct}%", Toast.LENGTH_LONG).show()
             finish()
         }

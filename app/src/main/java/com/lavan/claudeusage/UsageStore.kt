@@ -108,6 +108,13 @@ object UsageStore {
         return if (r > now) "resets in ${fmt(r - now)}" else ""
     }
 
+    // ---- Background refresh bookkeeping ----
+
+    fun org(c: Context): String = prefs(c).getString("org", "") ?: ""
+    fun setOrg(c: Context, id: String) { prefs(c).edit().putString("org", id).apply() }
+    fun status(c: Context): String = prefs(c).getString("status", "not run yet") ?: "not run yet"
+    fun setStatus(c: Context, s: String) { prefs(c).edit().putString("status", s).apply() }
+
     fun weeklyText(c: Context): String {
         val w = weeklyPct(c) ?: return ""
         val r = weeklyResetText(c)
