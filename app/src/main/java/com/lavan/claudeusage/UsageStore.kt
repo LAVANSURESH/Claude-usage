@@ -2,7 +2,7 @@ package com.lavan.claudeusage
 
 import android.content.Context
 
-/** Local counter for a rolling usage window (Claude's session limit resets ~5h after your first message). */
+/** Local counter plus values synced from claude.ai > Settings > Usage. */
 object UsageStore {
     private fun prefs(c: Context) = c.getSharedPreferences("usage", Context.MODE_PRIVATE)
 
@@ -15,7 +15,21 @@ object UsageStore {
         prefs(c).edit().putInt("limit", limit.coerceAtLeast(1)).putInt("hours", hours.coerceAtLeast(1)).apply()
     }
 
-    /** Clears the counter once the window has elapsed. */
+    /** "2h 15m", "6d 2h", "57m" */
+    fun fmt(ms: Long): String {
+        val m = ms / 60_000
+        val d = m / 1440
+        val h = (m % 1440) / 60
+        val mm = m % 60
+        return when {
+            d > 0 -> "${d}d ${h}h"
+            h > 0 -> "${h}h ${mm}m"
+            else -> "${mm}m"
+        }
+    }
+
+    // ---- Local counter ----
+
     fun refresh(c: Context) {
         val s = start(c)
         if (s > 0 && System.currentTimeMillis() >= s + windowHours(c) * 3_600_000L) reset(c)
@@ -33,20 +47,32 @@ object UsageStore {
         prefs(c).edit().putInt("used", 0).putLong("start", 0L).apply()
     }
 
-    // ---- Values synced from claude.ai > Settings > Usage ----
+    fun remainingMs(c: Context): Long {
+        refresh(c)
+        val s = start(c)
+        if (s == 0L) return 0L
+        return (s + windowHours(c) * 3_600_000L - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
 
-    fun saveSync(c: Context, sessionPct: Int, resetMs: Long, weeklyPct: Int, weeklyReset: String) {
+    fun resetText(c: Context): String {
+        val ms = remainingMs(c)
+        return if (ms == 0L) "no active window" else "resets in ${fmt(ms)}"
+    }
+
+    // ---- Synced values ----
+
+    fun saveSync(c: Context, sessionPct: Int, resetMs: Long, weeklyPct: Int, weeklyResetMs: Long) {
         val now = System.currentTimeMillis()
         prefs(c).edit()
             .putInt("syncPct", sessionPct)
             .putLong("syncAt", now)
             .putLong("syncResetAt", if (resetMs > 0) now + resetMs else 0L)
             .putInt("weekPct", weeklyPct)
-            .putString("weekReset", weeklyReset)
+            .putLong("weekResetAt", if (weeklyResetMs > 0) now + weeklyResetMs else 0L)
             .apply()
     }
 
-    /** Session % from the last sync while it is still valid, else null (widget falls back to the local counter). */
+    /** Session % from the last sync while still valid, else null (widget falls back to the local counter). */
     fun syncedSessionPct(c: Context): Int? {
         val p = prefs(c)
         val at = p.getLong("syncAt", 0L)
@@ -62,33 +88,29 @@ object UsageStore {
         val p = prefs(c)
         val r = p.getLong("syncResetAt", 0L)
         val now = System.currentTimeMillis()
-        if (r > now) {
-            val m = (r - now) / 60_000
-            return "Resets in ${m / 60}h ${m % 60}m"
-        }
-        return "Synced ${(now - p.getLong("syncAt", now)) / 60_000}m ago"
+        if (r > now) return "resets in ${fmt(r - now)}"
+        return "synced ${(now - p.getLong("syncAt", now)) / 60_000}m ago"
+    }
+
+    /** Weekly % from the last sync, or null if unknown or its week has ended. */
+    fun weeklyPct(c: Context): Int? {
+        val p = prefs(c)
+        val w = p.getInt("weekPct", -1)
+        if (w < 0) return null
+        val r = p.getLong("weekResetAt", 0L)
+        if (r > 0 && System.currentTimeMillis() >= r) return null
+        return w
+    }
+
+    fun weeklyResetText(c: Context): String {
+        val r = prefs(c).getLong("weekResetAt", 0L)
+        val now = System.currentTimeMillis()
+        return if (r > now) "resets in ${fmt(r - now)}" else ""
     }
 
     fun weeklyText(c: Context): String {
-        val p = prefs(c)
-        val w = p.getInt("weekPct", -1)
-        if (w < 0) return ""
-        val r = p.getString("weekReset", "") ?: ""
+        val w = weeklyPct(c) ?: return ""
+        val r = weeklyResetText(c)
         return "Week: $w%" + if (r.isNotEmpty()) " · $r" else ""
-    }
-
-    /** Milliseconds until the window resets, or 0 if no window is running. */
-    fun remainingMs(c: Context): Long {
-        refresh(c)
-        val s = start(c)
-        if (s == 0L) return 0L
-        return (s + windowHours(c) * 3_600_000L - System.currentTimeMillis()).coerceAtLeast(0L)
-    }
-
-    fun resetText(c: Context): String {
-        val ms = remainingMs(c)
-        if (ms == 0L) return "No active window"
-        val m = ms / 60_000
-        return "Resets in ${m / 60}h ${m % 60}m"
     }
 }

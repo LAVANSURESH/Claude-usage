@@ -67,7 +67,7 @@ class SyncActivity : Activity() {
                 ?: return@evaluateJavascript
             val r = UsageParser.parse(text) ?: return@evaluateJavascript
             done = true
-            UsageStore.saveSync(this, r.sessionPct, r.sessionResetMs, r.weeklyPct, r.weeklyReset)
+            UsageStore.saveSync(this, r.sessionPct, r.sessionResetMs, r.weeklyPct, r.weeklyResetMs)
             UsageWidget.refreshAll(this)
             Toast.makeText(this, "Synced: session ${r.sessionPct}%", Toast.LENGTH_LONG).show()
             finish()
